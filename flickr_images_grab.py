@@ -22,7 +22,7 @@ import times
 import requests
 import flickr_api
 
-config = json.load(open('./painladen.config'))
+config = json.load(open('config.json'))
 
 TAG = 'philMeta'
 API_KEY = config['flickr_api_key']
@@ -92,7 +92,7 @@ def download_search(results):
         img_fname = IMG_FNAME % (meta['query'], photo['id'], meta['query'])
         img_fname_s = IMG_FNAME_S % (meta['query'], photo['id'], meta['query'])
         save_image(img_url, img_fname)
-        save_image(img_url_s, img_fname_s)
+        #save_image(img_url_s, img_fname_s)
     with open(DATA_FNAME % meta['query'], 'w') as f:
         json.dump(photos_data, f)
 
@@ -113,7 +113,7 @@ def search(query='pain'):
               'media': 'photos',  # just photos
               'content_type': '1',  # just photos
               'privacy_filter': '1',  # public photos
-              'license': '1,2,4,5',  # see README.md
+              'license': '1,2,4,5,6,7,8,9,10',  # see README.md
               'per_page': '500',  # max=500
               'sort': 'relevance',
               'method': 'flickr.photos.search',
@@ -123,12 +123,42 @@ def search(query='pain'):
     fname = './search/search.%s.%s.json' % (clean_query, YMD)
     response = requests.get(REST_ENDPOINT,
                             params=dict(params, **query_dict))
+    data = json.loads(unjsonpify(response.text))
+    
+    pages = data["photos"]["pages"]
+    page = 1
+    
     with open(fname, 'w') as f:
-        data = json.loads(unjsonpify(response.text))
         data[TAG] = {}
-        data[TAG]['query'] = clean_query
+        data[TAG]['query'] = clean_query + str(page)
         data[TAG]['when'] = YMD
         f.write(json.dumps(data))
+    while(page < pages):
+        page += 1
+        params = {'api_key': API_KEY,
+              'safe_search': '1',  # safest
+              'media': 'photos',  # just photos
+              'content_type': '1',  # just photos
+              'privacy_filter': '1',  # public photos
+              'license': '1,2,4,5,6,7,8,9,10',  # see README.md
+              'per_page': '500',  # max=500
+              'page': page,
+              'sort': 'relevance',
+              'method': 'flickr.photos.search',
+              'format': 'json'}
+        query_dict = {'text': query}
+        clean_query = query.replace(' ', '-')
+        fname = './search/search.%s.%s.json' % (clean_query + "page" + str(page), YMD)
+        response = requests.get(REST_ENDPOINT,
+                                params=dict(params, **query_dict))
+        data = json.loads(unjsonpify(response.text))
+        
+        with open(fname, 'w') as f:
+            data[TAG] = {}
+            data[TAG]['query'] = clean_query
+            data[TAG]['when'] = YMD
+            f.write(json.dumps(data))
+    
 
 
 def keywords_search(args, keywords):
@@ -161,7 +191,12 @@ if __name__ == '__main__':
         keywords_search(args, keywords)
     elif args.download:
         searches = glob.glob('./search/search.*.json')
-        download_searches(searches)
+        try:
+            download_searches(searches)
+        except AssertionError as error:
+            print("Download error")
+            print(error)
+            pass
     else:
         pprint(config)
         print(parser.print_help())
